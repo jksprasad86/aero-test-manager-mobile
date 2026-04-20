@@ -5,7 +5,8 @@
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
-    "build:android": "eas build --platform android --profile preview"
+    "build:android": "eas build --platform android --profile preview",
+    "distribute": "firebase appdistribution:distribute dist/app.apk --app YOUR_FIREBASE_APP_ID --groups internal-team --release-notes-file dist/release-notes.txt"
   },
   "dependencies": {
     "expo": "~51.0.28",

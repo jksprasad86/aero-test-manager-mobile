@@ -1,6 +1,6 @@
 node_modules/
 .expo/
-dist/
+dist/*.apk
 *.jks
 *.p8
 *.p12
