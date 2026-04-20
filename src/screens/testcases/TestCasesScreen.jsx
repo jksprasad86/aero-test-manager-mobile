@@ -32,8 +32,9 @@ export default function TestCasesScreen() {
     try {
       setError(null);
       const { data } = await testCasesAPI.getModules();
-      setAllModules(data);
-      setItems(data);
+      const modules = data.modules || [];
+      setAllModules(modules);
+      setItems(modules);
       setTrail([]);
     } catch {
       setError('Failed to load test cases.');

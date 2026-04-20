@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { testCasesAPI } from '../../api/client';
+import { testCasesAPI, adminAPI } from '../../api/client';
 import { COLORS } from '../../config';
 import VoiceInput from '../../components/VoiceInput';
 
@@ -59,12 +59,10 @@ export default function TestCaseFormScreen() {
   const [modules,     setModules]     = useState([]);
   const [submodules,  setSubmodules]  = useState([]);
   const [scenarios,   setScenarios]   = useState([]);
-  const [priorities,  setPriorities]  = useState([
-    { id: null, name: 'None' },
-    { id: 'HIGH',   name: 'HIGH'   },
-    { id: 'MEDIUM', name: 'MEDIUM' },
-    { id: 'LOW',    name: 'LOW'    },
-  ]);
+  const [priorities,  setPriorities]  = useState([]);
+  const [types,       setTypes]       = useState([]);
+  const [selTypes,    setSelTypes]    = useState([]); // selected type IDs
+  const [showTypes,   setShowTypes]   = useState(false);
 
   // Form state
   const [name,         setName]         = useState('');
@@ -84,15 +82,22 @@ export default function TestCaseFormScreen() {
   const [loading, setLoading] = useState(isEdit);
   const [saving,  setSaving]  = useState(false);
 
-  // Load module hierarchy
+  // Load module hierarchy + admin lookup data
   useEffect(() => {
     (async () => {
-      const { data } = await testCasesAPI.getModules();
-      setModules(data);
+      const [modulesRes, prioritiesRes, typesRes] = await Promise.all([
+        testCasesAPI.getModules(),
+        adminAPI.getPriorities(),
+        adminAPI.getTypes(),
+      ]);
+      const loadedModules = modulesRes.data.modules || [];
+      setModules(loadedModules);
+      setPriorities([{ id: null, name: 'None' }, ...(prioritiesRes.data.priorities || [])]);
+      setTypes(typesRes.data.types || []);
 
       // Pre-select from navigation params
       if (route.params?.moduleId) {
-        const m = data.find(x => x.id === route.params.moduleId);
+        const m = loadedModules.find(x => x.id === route.params.moduleId);
         if (m) {
           setSelModule(m);
           setSubmodules(m.submodules || []);
@@ -122,6 +127,7 @@ export default function TestCaseFormScreen() {
         setPreCondition(data.preCondition || '');
         setSteps(data.steps?.length ? data.steps.map(s => ({ action: s.action, expectedResult: s.expectedResult })) : [EMPTY_STEP()]);
         setSelPriority(data.priority || null);
+        setSelTypes((data.types || []).map(t => t.typeId || t.type?.id));
         // Set hierarchy
         const m = data.scenario?.submodule?.module;
         if (m) { setSelModule(m); setSubmodules(m.submodules || []); }
@@ -158,6 +164,7 @@ export default function TestCaseFormScreen() {
         preCondition: preCondition.trim() || null,
         scenarioId:   selScenario.id,
         priorityId:   selPriority?.id || null,
+        typeIds:      selTypes.filter(Boolean),
         steps:        validSteps.map((s, i) => ({ order: i + 1, action: s.action.trim(), expectedResult: s.expectedResult.trim() })),
       };
 
@@ -239,6 +246,31 @@ export default function TestCaseFormScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Types (multi-select) */}
+      {types.length > 0 && (
+        <View style={styles.field}>
+          <Text style={styles.label}>Types</Text>
+          <View style={styles.typeChips}>
+            {types.map(t => {
+              const selected = selTypes.includes(t.id);
+              return (
+                <TouchableOpacity
+                  key={t.id}
+                  style={[styles.typeChip, selected && styles.typeChipSelected]}
+                  onPress={() => setSelTypes(prev =>
+                    prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                  )}
+                >
+                  <Text style={[styles.typeChipText, selected && styles.typeChipTextSelected]}>
+                    {t.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       {/* Steps */}
       <View style={styles.stepsSection}>
         <Text style={styles.stepsTitle}>Test Steps *</Text>
@@ -300,7 +332,7 @@ export default function TestCaseFormScreen() {
       />
       <PickerModal
         visible={showPri} title="Select Priority"
-        items={[{ id: null, name: 'None' }, { id: 'HIGH', name: 'HIGH' }, { id: 'MEDIUM', name: 'MEDIUM' }, { id: 'LOW', name: 'LOW' }]}
+        items={priorities}
         onSelect={p => setSelPriority(p.id ? p : null)}
         onClose={() => setShowPri(false)}
       />
@@ -327,6 +359,11 @@ const styles = StyleSheet.create({
   removeStepBtn:   { padding: 4 },
   addStepBtn:      { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 10, borderStyle: 'dashed', justifyContent: 'center' },
   addStepText:     { color: COLORS.primary, fontWeight: '600', fontSize: 14 },
-  saveBtn:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 16, marginTop: 8, elevation: 3 },
-  saveBtnText:     { color: '#fff', fontWeight: '700', fontSize: 16 },
+  saveBtn:             { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 16, marginTop: 8, elevation: 3 },
+  saveBtnText:         { color: '#fff', fontWeight: '700', fontSize: 16 },
+  typeChips:           { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  typeChip:            { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+  typeChipSelected:    { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  typeChipText:        { fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
+  typeChipTextSelected:{ color: '#fff' },
 });

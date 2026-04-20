@@ -1,30 +1,64 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, Alert,
   KeyboardAvoidingView, Platform, ScrollView,
-  Modal, SafeAreaView,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
+import * as Linking from 'expo-linking';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS } from '../../config';
-import { API_BASE_URL } from '../../config';
+import { COLORS, API_BASE_URL } from '../../config';
 
-// Base URL of the web app (strip /api suffix)
-const APP_BASE_URL = API_BASE_URL.replace(/\/api$/, '');
-const SSO_START_URL  = `${APP_BASE_URL}/api/auth/google`;
-const SSO_CALLBACK   = `${APP_BASE_URL}/sso-callback`;
+const APP_BASE_URL  = API_BASE_URL.replace(/\/api$/, '');
+const SSO_START_URL = `${APP_BASE_URL}/api/auth/google?mobile=true`;
+// Deep link that the backend will redirect to after SSO
+// e.g.  aerotestmanager://sso-callback?token=xxx
+const MOBILE_SCHEME = 'aerotestmanager';
 
 export default function LoginScreen() {
   const { login, loginWithToken } = useAuth();
 
-  const [email,      setEmail]      = useState('');
-  const [password,   setPassword]   = useState('');
-  const [showPwd,    setShowPwd]    = useState(false);
-  const [loading,    setLoading]    = useState(false);
-  const [ssoVisible, setSsoVisible] = useState(false);
-  const [ssoLoading, setSsoLoading] = useState(true);
+  const [email,    setEmail]    = useState('');
+  const [password, setPassword] = useState('');
+  const [showPwd,  setShowPwd]  = useState(false);
+  const [loading,  setLoading]  = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(false);
+
+  // ── Listen for deep link redirect after Google SSO ─────────────────────────
+  useEffect(() => {
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+    return () => subscription.remove();
+  }, []);
+
+  function handleDeepLink({ url }) {
+    if (!url.startsWith(`${MOBILE_SCHEME}://sso-callback`)) return;
+    try {
+      const parsed      = Linking.parse(url);
+      const token       = parsed.queryParams?.token;
+      const name        = parsed.queryParams?.name  || '';
+      const userEmail   = parsed.queryParams?.email || '';
+      const permsRaw    = parsed.queryParams?.perms || '[]';
+      const permissions = JSON.parse(decodeURIComponent(permsRaw));
+
+      if (!token) throw new Error('No token');
+      setSsoLoading(false);
+      loginWithToken(token, { name, email: userEmail }, permissions);
+    } catch {
+      setSsoLoading(false);
+      Alert.alert('SSO Failed', 'Could not complete sign-in. Please try again.');
+    }
+  }
+
+  // ── Open Google SSO in Chrome Custom Tabs ─────────────────────────────────
+  async function handleSSO() {
+    setSsoLoading(true);
+    try {
+      await Linking.openURL(SSO_START_URL);
+    } catch {
+      setSsoLoading(false);
+      Alert.alert('Error', 'Could not open Google Sign-In.');
+    }
+  }
 
   // ── Email / Password login ─────────────────────────────────────────────────
   async function handleLogin() {
@@ -40,30 +74,6 @@ export default function LoginScreen() {
       Alert.alert('Login Failed', msg);
     } finally {
       setLoading(false);
-    }
-  }
-
-  // ── SSO WebView — intercept the callback redirect ─────────────────────────
-  function handleWebViewNavChange(navState) {
-    const { url } = navState;
-    if (!url.startsWith(SSO_CALLBACK)) return;
-
-    // Extract token + user info from query params
-    try {
-      const urlObj   = new URL(url);
-      const token    = urlObj.searchParams.get('token');
-      const name     = urlObj.searchParams.get('name')  || '';
-      const email    = urlObj.searchParams.get('email') || '';
-      const permsRaw = urlObj.searchParams.get('perms') || '[]';
-      const permissions = JSON.parse(decodeURIComponent(permsRaw));
-
-      if (!token) throw new Error('No token in callback');
-
-      setSsoVisible(false);
-      loginWithToken(token, { name, email }, permissions);
-    } catch {
-      setSsoVisible(false);
-      Alert.alert('SSO Failed', 'Could not complete sign-in. Please try again.');
     }
   }
 
@@ -89,11 +99,14 @@ export default function LoginScreen() {
           <Text style={styles.cardTitle}>Sign In</Text>
 
           {/* Google SSO Button */}
-          <TouchableOpacity style={styles.ssoBtn} onPress={() => { setSsoLoading(true); setSsoVisible(true); }}>
-            <View style={styles.googleIcon}>
-              <Text style={styles.googleIconText}>G</Text>
-            </View>
-            <Text style={styles.ssoBtnText}>Continue with Google (SSO)</Text>
+          <TouchableOpacity style={styles.ssoBtn} onPress={handleSSO} disabled={ssoLoading}>
+            {ssoLoading
+              ? <ActivityIndicator size="small" color={COLORS.primary} style={{ marginRight: 12 }} />
+              : <View style={styles.googleIcon}><Text style={styles.googleIconText}>G</Text></View>
+            }
+            <Text style={styles.ssoBtnText}>
+              {ssoLoading ? 'Opening Google Sign-In…' : 'Continue with Google (SSO)'}
+            </Text>
           </TouchableOpacity>
 
           {/* Divider */}
@@ -151,42 +164,6 @@ export default function LoginScreen() {
 
         <Text style={styles.footer}>Aero Test Manager v1.0</Text>
       </ScrollView>
-
-      {/* SSO WebView Modal */}
-      <Modal visible={ssoVisible} animationType="slide" onRequestClose={() => setSsoVisible(false)}>
-        <SafeAreaView style={styles.webViewContainer}>
-          {/* Modal Header */}
-          <View style={styles.webViewHeader}>
-            <Text style={styles.webViewTitle}>Sign in with Google</Text>
-            <TouchableOpacity onPress={() => setSsoVisible(false)} style={styles.webViewClose}>
-              <Ionicons name="close" size={24} color={COLORS.text} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Loading indicator overlay */}
-          {ssoLoading && (
-            <View style={styles.webViewLoading}>
-              <ActivityIndicator size="large" color={COLORS.primary} />
-              <Text style={styles.webViewLoadingText}>Loading Google Sign-In…</Text>
-            </View>
-          )}
-
-          <WebView
-            source={{ uri: SSO_START_URL }}
-            onNavigationStateChange={handleWebViewNavChange}
-            onLoadStart={() => setSsoLoading(true)}
-            onLoadEnd={()   => setSsoLoading(false)}
-            onError={() => {
-              setSsoLoading(false);
-              setSsoVisible(false);
-              Alert.alert('Error', 'Could not load Google Sign-In. Check your connection.');
-            }}
-            style={ssoLoading ? { opacity: 0 } : { flex: 1 }}
-            javaScriptEnabled
-            domStorageEnabled
-          />
-        </SafeAreaView>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -223,11 +200,4 @@ const styles = StyleSheet.create({
   loginBtnText:      { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
 
   footer:            { textAlign: 'center', color: 'rgba(255,255,255,0.5)', marginTop: 32, fontSize: 12 },
-
-  webViewContainer:  { flex: 1, backgroundColor: COLORS.surface },
-  webViewHeader:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  webViewTitle:      { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  webViewClose:      { padding: 4 },
-  webViewLoading:    { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.surface, zIndex: 10 },
-  webViewLoadingText:{ marginTop: 12, color: COLORS.textMuted, fontSize: 14 },
 });

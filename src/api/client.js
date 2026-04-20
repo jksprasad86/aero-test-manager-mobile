@@ -54,9 +54,13 @@ export const dailyStatsAPI = {
   updateEntry:  (id, data) => api.put(`/dailystats/${id}`, data),
 };
 
-// ── Config (ticket statuses for work update form) ────────────────────────────
+// ── Admin config (lookup data set up by admin in the web app) ────────────────
 export const adminAPI = {
   getTicketStatuses: () => api.get('/admin/ticket-statuses'),
+  getPriorities:     () => api.get('/admin/priorities'),
+  getTypes:          () => api.get('/admin/types'),
+  getTags:           () => api.get('/admin/tags'),
+  getProjects:       () => api.get('/admin/projects'),
 };
 
 export default api;

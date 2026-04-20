@@ -4,6 +4,7 @@
     "slug": "aero-test-manager",
     "version": "1.0.0",
     "orientation": "portrait",
+    "scheme": "aerotestmanager",
     "userInterfaceStyle": "light",
     "splash": {
       "resizeMode": "contain",

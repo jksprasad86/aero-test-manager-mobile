@@ -252,7 +252,7 @@ export default function WorkEntryFormScreen() {
   // Load ticket statuses for the status pickers
   useEffect(() => {
     adminAPI.getTicketStatuses()
-      .then(({ data }) => setStatuses(Array.isArray(data) ? data : []))
+      .then(({ data }) => setStatuses(data.statuses || []))
       .catch(() => {});
   }, []);
 
