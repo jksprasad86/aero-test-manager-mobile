@@ -1,20 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Platform, ScrollView, Image,
+  KeyboardAvoidingView, Platform, ScrollView,
+  Modal, SafeAreaView,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../config';
+import { API_BASE_URL } from '../../config';
+
+// Base URL of the web app (strip /api suffix)
+const APP_BASE_URL = API_BASE_URL.replace(/\/api$/, '');
+const SSO_START_URL  = `${APP_BASE_URL}/api/auth/google`;
+const SSO_CALLBACK   = `${APP_BASE_URL}/sso-callback`;
 
 export default function LoginScreen() {
-  const { login } = useAuth();
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [showPwd,  setShowPwd]  = useState(false);
-  const [loading,  setLoading]  = useState(false);
+  const { login, loginWithToken } = useAuth();
 
+  const [email,      setEmail]      = useState('');
+  const [password,   setPassword]   = useState('');
+  const [showPwd,    setShowPwd]    = useState(false);
+  const [loading,    setLoading]    = useState(false);
+  const [ssoVisible, setSsoVisible] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(true);
+
+  // ── Email / Password login ─────────────────────────────────────────────────
   async function handleLogin() {
     if (!email.trim() || !password.trim()) {
       Alert.alert('Required', 'Please enter your email and password.');
@@ -31,12 +43,38 @@ export default function LoginScreen() {
     }
   }
 
+  // ── SSO WebView — intercept the callback redirect ─────────────────────────
+  function handleWebViewNavChange(navState) {
+    const { url } = navState;
+    if (!url.startsWith(SSO_CALLBACK)) return;
+
+    // Extract token + user info from query params
+    try {
+      const urlObj   = new URL(url);
+      const token    = urlObj.searchParams.get('token');
+      const name     = urlObj.searchParams.get('name')  || '';
+      const email    = urlObj.searchParams.get('email') || '';
+      const permsRaw = urlObj.searchParams.get('perms') || '[]';
+      const permissions = JSON.parse(decodeURIComponent(permsRaw));
+
+      if (!token) throw new Error('No token in callback');
+
+      setSsoVisible(false);
+      loginWithToken(token, { name, email }, permissions);
+    } catch {
+      setSsoVisible(false);
+      Alert.alert('SSO Failed', 'Could not complete sign-in. Please try again.');
+    }
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoBox}>
@@ -49,6 +87,21 @@ export default function LoginScreen() {
         {/* Card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Sign In</Text>
+
+          {/* Google SSO Button */}
+          <TouchableOpacity style={styles.ssoBtn} onPress={() => { setSsoLoading(true); setSsoVisible(true); }}>
+            <View style={styles.googleIcon}>
+              <Text style={styles.googleIconText}>G</Text>
+            </View>
+            <Text style={styles.ssoBtnText}>Continue with Google (SSO)</Text>
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or sign in with email</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
           {/* Email */}
           <View style={styles.fieldWrap}>
@@ -87,7 +140,7 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          {/* Submit */}
+          {/* Email Login Button */}
           <TouchableOpacity style={styles.loginBtn} onPress={handleLogin} disabled={loading}>
             {loading
               ? <ActivityIndicator color="#fff" />
@@ -98,43 +151,83 @@ export default function LoginScreen() {
 
         <Text style={styles.footer}>Aero Test Manager v1.0</Text>
       </ScrollView>
+
+      {/* SSO WebView Modal */}
+      <Modal visible={ssoVisible} animationType="slide" onRequestClose={() => setSsoVisible(false)}>
+        <SafeAreaView style={styles.webViewContainer}>
+          {/* Modal Header */}
+          <View style={styles.webViewHeader}>
+            <Text style={styles.webViewTitle}>Sign in with Google</Text>
+            <TouchableOpacity onPress={() => setSsoVisible(false)} style={styles.webViewClose}>
+              <Ionicons name="close" size={24} color={COLORS.text} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Loading indicator overlay */}
+          {ssoLoading && (
+            <View style={styles.webViewLoading}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+              <Text style={styles.webViewLoadingText}>Loading Google Sign-In…</Text>
+            </View>
+          )}
+
+          <WebView
+            source={{ uri: SSO_START_URL }}
+            onNavigationStateChange={handleWebViewNavChange}
+            onLoadStart={() => setSsoLoading(true)}
+            onLoadEnd={()   => setSsoLoading(false)}
+            onError={() => {
+              setSsoLoading(false);
+              setSsoVisible(false);
+              Alert.alert('Error', 'Could not load Google Sign-In. Check your connection.');
+            }}
+            style={ssoLoading ? { opacity: 0 } : { flex: 1 }}
+            javaScriptEnabled
+            domStorageEnabled
+          />
+        </SafeAreaView>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex:       { flex: 1, backgroundColor: COLORS.primary },
-  container:  { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  header:     { alignItems: 'center', marginBottom: 32 },
-  logoBox:    {
-    width: 88, height: 88, borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 16,
-  },
-  appName:    { fontSize: 26, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
-  tagline:    { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
-  card:       {
-    backgroundColor: COLORS.surface, borderRadius: 20,
-    padding: 28, elevation: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15, shadowRadius: 12,
-  },
-  cardTitle:  { fontSize: 20, fontWeight: '700', color: COLORS.text, marginBottom: 24 },
-  fieldWrap:  { marginBottom: 20 },
-  label:      { fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6 },
-  inputRow:   {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 10,
-    backgroundColor: COLORS.background, paddingHorizontal: 12, height: 48,
-  },
-  inputIcon:  { marginRight: 8 },
-  input:      { flex: 1, fontSize: 15, color: COLORS.text },
-  eyeBtn:     { padding: 4 },
-  loginBtn:   {
-    backgroundColor: COLORS.primary, borderRadius: 10,
-    height: 50, justifyContent: 'center', alignItems: 'center', marginTop: 8,
-    elevation: 3,
-  },
-  loginBtnText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
-  footer:     { textAlign: 'center', color: 'rgba(255,255,255,0.5)', marginTop: 32, fontSize: 12 },
+  flex:              { flex: 1, backgroundColor: COLORS.primary },
+  container:         { flexGrow: 1, justifyContent: 'center', padding: 24 },
+
+  header:            { alignItems: 'center', marginBottom: 32 },
+  logoBox:           { width: 88, height: 88, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  appName:           { fontSize: 26, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
+  tagline:           { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
+
+  card:              { backgroundColor: COLORS.surface, borderRadius: 20, padding: 28, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 },
+  cardTitle:         { fontSize: 20, fontWeight: '700', color: COLORS.text, marginBottom: 20 },
+
+  ssoBtn:            { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 10, paddingVertical: 13, paddingHorizontal: 16, marginBottom: 20, backgroundColor: COLORS.surface },
+  googleIcon:        { width: 24, height: 24, borderRadius: 12, backgroundColor: '#4285F4', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  googleIconText:    { color: '#fff', fontWeight: '800', fontSize: 13 },
+  ssoBtnText:        { fontSize: 15, fontWeight: '600', color: COLORS.text },
+
+  divider:           { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  dividerLine:       { flex: 1, height: 1, backgroundColor: COLORS.border },
+  dividerText:       { marginHorizontal: 10, fontSize: 12, color: COLORS.textMuted },
+
+  fieldWrap:         { marginBottom: 20 },
+  label:             { fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6 },
+  inputRow:          { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 10, backgroundColor: COLORS.background, paddingHorizontal: 12, height: 48 },
+  inputIcon:         { marginRight: 8 },
+  input:             { flex: 1, fontSize: 15, color: COLORS.text },
+  eyeBtn:            { padding: 4 },
+
+  loginBtn:          { backgroundColor: COLORS.primary, borderRadius: 10, height: 50, justifyContent: 'center', alignItems: 'center', marginTop: 8, elevation: 3 },
+  loginBtnText:      { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+
+  footer:            { textAlign: 'center', color: 'rgba(255,255,255,0.5)', marginTop: 32, fontSize: 12 },
+
+  webViewContainer:  { flex: 1, backgroundColor: COLORS.surface },
+  webViewHeader:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  webViewTitle:      { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  webViewClose:      { padding: 4 },
+  webViewLoading:    { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.surface, zIndex: 10 },
+  webViewLoadingText:{ marginTop: 12, color: COLORS.textMuted, fontSize: 14 },
 });

@@ -45,6 +45,14 @@ export function AuthProvider({ children }) {
     return data;
   }
 
+  // Used by SSO WebView — receives token directly from the callback URL
+  async function loginWithToken(token, user, permissions) {
+    await saveToken(token);
+    await saveUser({ user, permissions });
+    setUser(user);
+    setPermissions(permissions || []);
+  }
+
   async function logout() {
     await clearAll();
     setUser(null);
@@ -56,7 +64,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, permissions, loading, login, logout, hasPermission }}>
+    <AuthContext.Provider value={{ user, permissions, loading, login, loginWithToken, logout, hasPermission }}>
       {children}
     </AuthContext.Provider>
   );
