@@ -40,7 +40,7 @@ export const dashboardAPI = {
 
 // ── Test Cases ───────────────────────────────────────────────────────────────
 export const testCasesAPI = {
-  getModules:        ()      => api.get('/testcases/modules'),
+  getModules:        (params)=> api.get('/testcases/modules', { params }),
   getAll:            (params)=> api.get('/testcases', { params }),
   getOne:            (id)    => api.get(`/testcases/${id}`),
   create:            (data)  => api.post('/testcases', data),

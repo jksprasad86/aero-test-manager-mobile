@@ -85,8 +85,9 @@ export default function TestCaseFormScreen() {
   // Load module hierarchy + admin lookup data
   useEffect(() => {
     (async () => {
+      const moduleParams = route.params?.projectId ? { projectId: route.params.projectId } : {};
       const [modulesRes, prioritiesRes, typesRes] = await Promise.all([
-        testCasesAPI.getModules(),
+        testCasesAPI.getModules(moduleParams),
         adminAPI.getPriorities(),
         adminAPI.getTypes(),
       ]);

@@ -23,34 +23,21 @@ export default function VoiceInput({
   multiline = false,
   style,
 }) {
-  const [listening,   setListening]   = useState(false);
-  const [voiceAvail,  setVoiceAvail]  = useState(!!Voice);
-  const partialRef = useRef('');
+  const [listening,  setListening]  = useState(false);
+  const [voiceAvail, setVoiceAvail] = useState(!!Voice);
+
+  // Refs so handlers always see the latest value/callback without re-registering
+  const valueRef      = useRef(value);
+  const onChangeRef   = useRef(onChangeText);
+  useEffect(() => { valueRef.current    = value;        }, [value]);
+  useEffect(() => { onChangeRef.current = onChangeText; }, [onChangeText]);
 
   useEffect(() => {
     if (!Voice) return;
-
-    // Check availability
     Voice.isAvailable().then(avail => setVoiceAvail(!!avail)).catch(() => setVoiceAvail(false));
-
-    Voice.onSpeechStart   = ()  => { setListening(true); partialRef.current = ''; };
-    Voice.onSpeechEnd     = ()  => setListening(false);
-    Voice.onSpeechError   = ()  => setListening(false);
-    Voice.onSpeechPartialResults = (e) => {
-      partialRef.current = e.value?.[0] || '';
-    };
-    Voice.onSpeechResults = (e) => {
-      const spoken = e.value?.[0] || '';
-      if (spoken) {
-        onChangeText(value ? `${value} ${spoken}` : spoken);
-      }
-      setListening(false);
-    };
-
-    return () => {
-      Voice.destroy().catch(() => {});
-    };
-  }, [value]);
+    // Cleanup only — handlers are registered per-tap in toggleListening
+    return () => { Voice.destroy().catch(() => {}); };
+  }, []);
 
   async function toggleListening() {
     if (!Voice) return;
@@ -59,6 +46,20 @@ export default function VoiceInput({
       setListening(false);
     } else {
       try {
+        // Register handlers right here so they are always scoped to THIS field.
+        // Multiple VoiceInput instances overwrite each other in useEffect (global handlers),
+        // so we bind them at the moment of actual recording instead.
+        Voice.onSpeechStart  = () => setListening(true);
+        Voice.onSpeechEnd    = () => setListening(false);
+        Voice.onSpeechError  = () => setListening(false);
+        Voice.onSpeechResults = (e) => {
+          const spoken = e.value?.[0] || '';
+          if (spoken) {
+            const cur = valueRef.current;
+            onChangeRef.current(cur ? `${cur} ${spoken}` : spoken);
+          }
+          setListening(false);
+        };
         await Voice.start('en-US');
       } catch {
         setListening(false);

@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ActivityIndicator, RefreshControl, Alert,
+  ActivityIndicator, RefreshControl, Alert, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { testCasesAPI } from '../../api/client';
+import { testCasesAPI, adminAPI } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../config';
 
@@ -18,6 +18,8 @@ export default function TestCasesScreen() {
   const canAdd  = hasPermission('TEST_CASES', 'ADD');
   const canEdit = hasPermission('TEST_CASES', 'EDIT');
 
+  const [projects,    setProjects]    = useState([]);
+  const [selProject,  setSelProject]  = useState(null); // null = All
   const [allModules,  setAllModules]  = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [refreshing,  setRefreshing]  = useState(false);
@@ -28,10 +30,18 @@ export default function TestCasesScreen() {
   // Current list items to show
   const [items,       setItems]       = useState([]);
 
-  const loadModules = useCallback(async () => {
+  // Load projects once on mount
+  useEffect(() => {
+    adminAPI.getProjects()
+      .then(({ data }) => setProjects(data.projects || []))
+      .catch(() => {});
+  }, []);
+
+  const loadModules = useCallback(async (projectId = selProject?.id) => {
     try {
       setError(null);
-      const { data } = await testCasesAPI.getModules();
+      const params = projectId ? { projectId } : {};
+      const { data } = await testCasesAPI.getModules(params);
       const modules = data.modules || [];
       setAllModules(modules);
       setItems(modules);
@@ -42,9 +52,15 @@ export default function TestCasesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [selProject]);
 
   useEffect(() => { loadModules(); }, [loadModules]);
+
+  function selectProject(project) {
+    setSelProject(project);
+    setLoading(true);
+    loadModules(project?.id);
+  }
 
   const onRefresh = () => { setRefreshing(true); loadModules(); };
 
@@ -87,6 +103,7 @@ export default function TestCasesScreen() {
   function handleAdd() {
     // Pass current context so the form can pre-select hierarchy
     const ctx = {};
+    if (selProject)        ctx.projectId   = selProject.id;
     if (trail.length >= 1) ctx.moduleId    = trail[0].item.id;
     if (trail.length >= 2) ctx.submoduleId = trail[1].item.id;
     if (trail.length >= 3) ctx.scenarioId  = trail[2].item.id;
@@ -174,6 +191,53 @@ export default function TestCasesScreen() {
 
   return (
     <View style={styles.screen}>
+
+      {/* ── Project filter strip ── */}
+      {projects.length > 0 && trail.length === 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.projectStrip}
+          contentContainerStyle={styles.projectStripContent}
+        >
+          {/* "All" chip */}
+          <TouchableOpacity
+            style={[styles.projectChip, !selProject && styles.projectChipActive]}
+            onPress={() => selectProject(null)}
+          >
+            <Ionicons
+              name="layers-outline"
+              size={13}
+              color={!selProject ? '#fff' : COLORS.textMuted}
+              style={{ marginRight: 4 }}
+            />
+            <Text style={[styles.projectChipText, !selProject && styles.projectChipTextActive]}>
+              All Projects
+            </Text>
+          </TouchableOpacity>
+
+          {projects.map(p => {
+            const active = selProject?.id === p.id;
+            return (
+              <TouchableOpacity
+                key={p.id}
+                style={[styles.projectChip, active && styles.projectChipActive]}
+                onPress={() => selectProject(p)}
+              >
+                {p.code ? (
+                  <Text style={[styles.projectCode, active && { color: 'rgba(255,255,255,0.8)' }]}>
+                    {p.code}
+                  </Text>
+                ) : null}
+                <Text style={[styles.projectChipText, active && styles.projectChipTextActive]} numberOfLines={1}>
+                  {p.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
       {/* Breadcrumb */}
       {trail.length > 0 && (
         <View style={styles.breadcrumb}>
@@ -249,6 +313,14 @@ const PRIORITY_COLOR = {
 const styles = StyleSheet.create({
   screen:        { flex: 1, backgroundColor: COLORS.background },
   center:        { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+
+  projectStrip:        { backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border, flexGrow: 0 },
+  projectStripContent: { paddingHorizontal: 12, paddingVertical: 10, gap: 8, flexDirection: 'row', alignItems: 'center' },
+  projectChip:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.background },
+  projectChipActive:   { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  projectChipText:     { fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
+  projectChipTextActive: { color: '#fff' },
+  projectCode:         { fontSize: 10, fontWeight: '700', color: COLORS.primary, marginRight: 4, backgroundColor: COLORS.primary + '18', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
 
   breadcrumb:    { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border, flexWrap: 'wrap', gap: 4 },
   breadItem:     { padding: 2 },
