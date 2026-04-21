@@ -61,9 +61,6 @@ jobs:
       - name: Upload to Firebase App Distribution
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-        run: |
-          firebase appdistribution:distribute \
-            android/app/build/outputs/apk/debug/app-debug.apk \
-            --app ${{ secrets.FIREBASE_APP_ID }} \
-            --groups "internal-team" \
-            --release-notes "${{ github.event.inputs.release_notes || github.event.head_commit.message }}"
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          RELEASE_NOTES: ${{ github.event.inputs.release_notes || 'New build' }}
+        run: firebase appdistribution:distribute android/app/build/outputs/apk/debug/app-debug.apk --app "$FIREBASE_APP_ID" --groups "internal-team" --release-notes "$RELEASE_NOTES"
