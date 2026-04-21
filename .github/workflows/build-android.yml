@@ -37,9 +37,11 @@ jobs:
         with:
           node-version: '20'
 
-      # 4. Install JS dependencies
+      # 4. Install JS dependencies (delete stale lockfile so expo-dev-client is not reinstalled)
       - name: Install dependencies
-        run: npm install
+        run: |
+          rm -f package-lock.json
+          npm install
 
       # 5. Generate native Android project from Expo config
       - name: Expo prebuild
