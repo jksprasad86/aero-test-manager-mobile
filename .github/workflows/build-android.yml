@@ -75,9 +75,10 @@ jobs:
           }
           EOF
 
-      # 8. Build optimised debug APK
+      # 8. Build optimised debug APK — bundleInDebug=true packages the JS bundle
+      #    into the APK so it works without a Metro dev server running
       - name: Build APK
-        run: cd android && ./gradlew assembleDebug --no-daemon
+        run: cd android && ./gradlew assembleDebug -PbundleInDebug=true --no-daemon
 
       # 9. Install Firebase CLI
       - name: Install Firebase CLI
