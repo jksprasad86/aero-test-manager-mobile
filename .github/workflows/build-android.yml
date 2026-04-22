@@ -37,7 +37,8 @@ jobs:
         with:
           node-version: '20'
 
-      # 4. Install JS dependencies (delete stale lockfile so expo-dev-client is not reinstalled)
+      # 4. Install JS dependencies
+      #    Delete stale lockfile so expo-dev-client is not reinstalled
       - name: Install dependencies
         run: |
           rm -f package-lock.json
@@ -47,11 +48,23 @@ jobs:
       - name: Expo prebuild
         run: npx expo prebuild --platform android --clean
 
-      # 6. Make Gradle executable
+      # 6. Bundle JS into assets folder
+      #    Required so the APK works standalone without a Metro dev server
+      - name: Bundle JavaScript into APK assets
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+
+      # 7. Make Gradle executable
       - name: Set Gradle permissions
         run: chmod +x android/gradlew
 
-      # 7. Strip unused CPU architectures — arm64-v8a covers all modern Android phones
+      # 8. Strip unused CPU architectures — arm64-v8a covers all modern Android phones
       #    This alone reduces APK size by ~60%
       - name: Configure ABI split (arm64-v8a only)
         run: |
@@ -75,16 +88,15 @@ jobs:
           }
           EOF
 
-      # 8. Build optimised debug APK — bundleInDebug=true packages the JS bundle
-      #    into the APK so it works without a Metro dev server running
+      # 9. Build APK — bundleInDebug=true ensures pre-bundled JS is used
       - name: Build APK
         run: cd android && ./gradlew assembleDebug -PbundleInDebug=true --no-daemon
 
-      # 9. Install Firebase CLI
+      # 10. Install Firebase CLI
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      # 10. Upload to Firebase App Distribution → team gets notified by email
+      # 11. Upload to Firebase App Distribution → team gets notified by email
       - name: Upload to Firebase App Distribution
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
