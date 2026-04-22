@@ -46,18 +46,11 @@ jobs:
       - name: Expo prebuild
         run: npx expo prebuild --platform android --clean
 
-      # 6. Enable JS bundling in debug builds
-      #    By default assembleDebug expects Metro — this makes it bundle JS into the APK
-      - name: Enable JS bundle in debug APK
-        run: |
-          mkdir -p android/app/src/main/assets
-          echo "bundleInDebug=true" >> android/gradle.properties
-
-      # 7. Make Gradle executable
+      # 6. Make Gradle executable
       - name: Set Gradle permissions
         run: chmod +x android/gradlew
 
-      # 8. Strip unused CPU architectures — arm64-v8a covers all modern Android phones
+      # 7. Strip unused CPU architectures — arm64-v8a covers all modern Android phones
       - name: Configure ABI split (arm64-v8a only)
         run: |
           cat >> android/app/build.gradle << 'EOF'
@@ -80,9 +73,29 @@ jobs:
           }
           EOF
 
-      # 9. Build APK
+      # 8. Generate a throwaway release keystore so we can build a release APK.
+      #    Release builds ALWAYS bundle the JS — debug builds try to load from
+      #    Metro at runtime, which is why they show "Unable to load script".
+      - name: Generate release keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -alias releasekey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass android123 \
+            -keypass android123 \
+            -dname "CN=Aero Test Manager,O=Aerosimple,C=US"
+
+      # 9. Build release APK — Gradle automatically bundles JS for release variants
       - name: Build APK
-        run: cd android && ./gradlew assembleDebug --no-daemon
+        run: |
+          cd android && ./gradlew assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file=${{ github.workspace }}/release.keystore \
+            -Pandroid.injected.signing.store.password=android123 \
+            -Pandroid.injected.signing.key.alias=releasekey \
+            -Pandroid.injected.signing.key.password=android123
 
       # 10. Install Firebase CLI
       - name: Install Firebase CLI
@@ -96,7 +109,7 @@ jobs:
           RELEASE_NOTES: ${{ github.event.inputs.release_notes || 'New build' }}
         run: |
           firebase appdistribution:distribute \
-            android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk \
+            android/app/build/outputs/apk/release/app-arm64-v8a-release.apk \
             --app "$FIREBASE_APP_ID" \
             --groups "internal-team" \
             --release-notes "$RELEASE_NOTES"
