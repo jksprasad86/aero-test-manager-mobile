@@ -6,13 +6,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, API_BASE_URL } from '../../config';
 
+// Required: completes any pending auth session when the app resumes
+WebBrowser.maybeCompleteAuthSession();
+
 const APP_BASE_URL  = API_BASE_URL.replace(/\/api$/, '');
 const SSO_START_URL = `${APP_BASE_URL}/api/auth/google?mobile=true`;
-// Deep link that the backend will redirect to after SSO
-// e.g.  aerotestmanager://sso-callback?token=xxx
 const MOBILE_SCHEME = 'aerotestmanager';
 
 export default function LoginScreen() {
@@ -49,11 +51,23 @@ export default function LoginScreen() {
     }
   }
 
-  // ── Open Google SSO in Chrome Custom Tabs ─────────────────────────────────
+  // ── Open Google SSO in an in-app Chrome Custom Tab ───────────────────────
+  // openAuthSessionAsync automatically closes the tab and returns the redirect
+  // URL when Chrome sees the aerotestmanager:// scheme — no deep link listener
+  // needed for the happy path.
   async function handleSSO() {
     setSsoLoading(true);
     try {
-      await Linking.openURL(SSO_START_URL);
+      const redirectUrl = Linking.createURL('sso-callback');
+      const result = await WebBrowser.openAuthSessionAsync(SSO_START_URL, redirectUrl);
+
+      if (result.type === 'success') {
+        // Browser returned control with the deep-link URL — handle it directly
+        handleDeepLink({ url: result.url });
+      } else {
+        // User cancelled or browser was dismissed
+        setSsoLoading(false);
+      }
     } catch {
       setSsoLoading(false);
       Alert.alert('Error', 'Could not open Google Sign-In.');
