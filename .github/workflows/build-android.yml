@@ -1,10 +1,8 @@
 name: Build & Distribute Android APK
 
 on:
-  # Auto-build on every push to main
   push:
     branches: [main]
-  # Manual trigger with custom release notes
   workflow_dispatch:
     inputs:
       release_notes:
@@ -38,7 +36,7 @@ jobs:
           node-version: '20'
 
       # 4. Install JS dependencies
-      #    Delete stale lockfile so expo-dev-client is not reinstalled
+      #    Delete stale lockfile to prevent expo-dev-client from being reinstalled
       - name: Install dependencies
         run: |
           rm -f package-lock.json
@@ -48,24 +46,18 @@ jobs:
       - name: Expo prebuild
         run: npx expo prebuild --platform android --clean
 
-      # 6. Bundle JS into assets folder
-      #    Required so the APK works standalone without a Metro dev server
-      - name: Bundle JavaScript into APK assets
+      # 6. Enable JS bundling in debug builds
+      #    By default assembleDebug expects Metro — this makes it bundle JS into the APK
+      - name: Enable JS bundle in debug APK
         run: |
           mkdir -p android/app/src/main/assets
-          npx react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file index.js \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res
+          echo "bundleInDebug=true" >> android/gradle.properties
 
       # 7. Make Gradle executable
       - name: Set Gradle permissions
         run: chmod +x android/gradlew
 
       # 8. Strip unused CPU architectures — arm64-v8a covers all modern Android phones
-      #    This alone reduces APK size by ~60%
       - name: Configure ABI split (arm64-v8a only)
         run: |
           cat >> android/app/build.gradle << 'EOF'
@@ -88,15 +80,15 @@ jobs:
           }
           EOF
 
-      # 9. Build APK — bundleInDebug=true ensures pre-bundled JS is used
+      # 9. Build APK
       - name: Build APK
-        run: cd android && ./gradlew assembleDebug -PbundleInDebug=true --no-daemon
+        run: cd android && ./gradlew assembleDebug --no-daemon
 
       # 10. Install Firebase CLI
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      # 11. Upload to Firebase App Distribution → team gets notified by email
+      # 11. Upload to Firebase App Distribution
       - name: Upload to Firebase App Distribution
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
