@@ -1,17 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Alert,
+  StyleSheet, ActivityIndicator, Alert, AppState,
   KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import * as Linking from 'expo-linking';
-import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, API_BASE_URL } from '../../config';
-
-// Must be called at module level — required by expo-web-browser on Android
-WebBrowser.maybeCompleteAuthSession();
 
 const APP_BASE_URL    = API_BASE_URL.replace(/\/api$/, '');
 const SSO_START_URL   = `${APP_BASE_URL}/api/auth/google?mobile=true`;
@@ -26,15 +22,15 @@ export default function LoginScreen() {
   const [loading,    setLoading]    = useState(false);
   const [ssoLoading, setSsoLoading] = useState(false);
 
-  // Ref to track whether SSO is in progress (avoids stale closure in listener)
-  const ssoActive = useRef(false);
+  const ssoActive    = useRef(false);
+  const ssoTimeout   = useRef(null);
 
   // ── Parse callback URL and log the user in ─────────────────────────────────
   function handleSsoCallback(url) {
     if (!url || !url.startsWith(CALLBACK_PREFIX)) return;
     ssoActive.current = false;
+    if (ssoTimeout.current) { clearTimeout(ssoTimeout.current); ssoTimeout.current = null; }
     try {
-      // Use URL API to parse query params reliably
       const parsed      = new URL(url.replace('aerotestmanager://', 'https://placeholder.com/'));
       const token       = parsed.searchParams.get('token');
       const name        = parsed.searchParams.get('name')  || '';
@@ -51,41 +47,44 @@ export default function LoginScreen() {
     }
   }
 
-  // ── Deep-link listener — fallback for when openAuthSessionAsync
-  //    doesn't catch the redirect (common on some Android versions) ───────────
+  // ── Deep-link listener + cold-start handler ────────────────────────────────
   useEffect(() => {
     const sub = Linking.addEventListener('url', ({ url }) => {
-      if (ssoActive.current && url.startsWith(CALLBACK_PREFIX)) {
+      if (url.startsWith(CALLBACK_PREFIX)) {
         sub.remove();
         handleSsoCallback(url);
       }
     });
-    // Also handle cold-start deep link (app was killed)
     Linking.getInitialURL().then(url => {
       if (url && url.startsWith(CALLBACK_PREFIX)) handleSsoCallback(url);
     });
     return () => sub.remove();
   }, []);
 
-  // ── Open Google OAuth in Chrome Custom Tab ─────────────────────────────────
+  // ── Reset loading if user returns to app without completing SSO ────────────
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active' && ssoActive.current) {
+        // Give the deep-link listener 2 s to fire before giving up
+        ssoTimeout.current = setTimeout(() => {
+          if (ssoActive.current) {
+            ssoActive.current = false;
+            setSsoLoading(false);
+          }
+        }, 2000);
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // ── Open Google OAuth in system browser (Linking.openURL) ─────────────────
+  // Using Linking.openURL instead of openAuthSessionAsync so Android's intent
+  // system handles the aerotestmanager:// deep-link redirect natively.
   async function handleSSO() {
     setSsoLoading(true);
     ssoActive.current = true;
     try {
-      const redirectUrl = Linking.createURL('sso-callback');
-      const result = await WebBrowser.openAuthSessionAsync(SSO_START_URL, redirectUrl, {
-        showInRecents: false,
-      });
-
-      if (result.type === 'success' && result.url) {
-        // Chrome Custom Tab caught the redirect — handle directly
-        handleSsoCallback(result.url);
-      } else if (result.type === 'cancel' || result.type === 'dismiss') {
-        // User cancelled — but on Android the Linking listener may still
-        // fire with the success URL, so only stop loading if truly cancelled
-        ssoActive.current = false;
-        setSsoLoading(false);
-      }
+      await Linking.openURL(SSO_START_URL);
     } catch {
       ssoActive.current = false;
       setSsoLoading(false);
