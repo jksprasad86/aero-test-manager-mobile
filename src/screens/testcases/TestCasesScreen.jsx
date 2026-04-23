@@ -95,7 +95,7 @@ export default function TestCasesScreen() {
   // Determine current level
   function currentLevel() {
     if (trail.length === 0) return LEVELS.MODULE;
-    return [LEVELS.SUBMODULE, LEVELS.SCENARIO, LEVELS.TESTCASE, 'DONE'][trail.length] || LEVELS.TESTCASE;
+    return [LEVELS.SUBMODULE, LEVELS.SCENARIO, LEVELS.TESTCASE][trail.length - 1] || LEVELS.TESTCASE;
   }
 
   const level = currentLevel();
