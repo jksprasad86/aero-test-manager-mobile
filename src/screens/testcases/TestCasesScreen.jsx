@@ -113,13 +113,14 @@ export default function TestCasesScreen() {
   // ── Render item ──────────────────────────────────────────────────────────────
   function renderItem({ item }) {
     if (level === LEVELS.TESTCASE) {
+      const priColor = PRIORITY_COLOR[item.priority?.name] || COLORS.textMuted;
       return (
-        <View style={styles.tcCard}>
+        <TouchableOpacity style={styles.tcCard} onPress={() => navigation.navigate('TestCaseDetail', { id: item.id })}>
           <View style={styles.tcCardHeader}>
             {item.tcId && <Text style={styles.tcId}>{item.tcId}</Text>}
             {item.priority && (
-              <View style={[styles.priorityBadge, { backgroundColor: PRIORITY_COLOR[item.priority.name] + '20' }]}>
-                <Text style={[styles.priorityText, { color: PRIORITY_COLOR[item.priority.name] }]}>
+              <View style={[styles.priorityBadge, { backgroundColor: priColor + '20' }]}>
+                <Text style={[styles.priorityText, { color: priColor }]}>
                   {item.priority.name}
                 </Text>
               </View>
@@ -131,7 +132,7 @@ export default function TestCasesScreen() {
             <Text style={styles.tcSteps}>{item.steps?.length || 0} steps</Text>
             {canEdit && (
               <TouchableOpacity
-                onPress={() => navigation.navigate('TestCaseForm', { id: item.id })}
+                onPress={e => { e.stopPropagation?.(); navigation.navigate('TestCaseForm', { id: item.id }); }}
                 style={styles.editBtn}
               >
                 <Ionicons name="pencil-outline" size={16} color={COLORS.primary} />
@@ -139,7 +140,7 @@ export default function TestCasesScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </View>
+        </TouchableOpacity>
       );
     }
 

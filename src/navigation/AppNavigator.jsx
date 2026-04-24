@@ -9,8 +9,9 @@ import { COLORS } from '../config';
 
 import LoginScreen         from '../screens/auth/LoginScreen';
 import DashboardScreen     from '../screens/dashboard/DashboardScreen';
-import TestCasesScreen     from '../screens/testcases/TestCasesScreen';
-import TestCaseFormScreen  from '../screens/testcases/TestCaseFormScreen';
+import TestCasesScreen       from '../screens/testcases/TestCasesScreen';
+import TestCaseDetailScreen  from '../screens/testcases/TestCaseDetailScreen';
+import TestCaseFormScreen    from '../screens/testcases/TestCaseFormScreen';
 import WorkUpdatesScreen   from '../screens/workupdates/WorkUpdatesScreen';
 import WorkEntryFormScreen from '../screens/workupdates/WorkEntryFormScreen';
 
@@ -29,6 +30,8 @@ function TestCasesStack() {
     <Stack.Navigator screenOptions={HEADER_STYLE}>
       <Stack.Screen name="TestCasesList" component={TestCasesScreen}
         options={{ title: 'Test Cases' }} />
+      <Stack.Screen name="TestCaseDetail" component={TestCaseDetailScreen}
+        options={{ title: 'Test Case Detail' }} />
       <Stack.Screen name="TestCaseForm" component={TestCaseFormScreen}
         options={({ route }) => ({ title: route.params?.id ? 'Edit Test Case' : 'Add Test Case' })} />
     </Stack.Navigator>

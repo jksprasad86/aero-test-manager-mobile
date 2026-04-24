@@ -124,17 +124,18 @@ export default function TestCaseFormScreen() {
     (async () => {
       try {
         const { data } = await testCasesAPI.getOne(editId);
-        setName(data.name || '');
-        setPreCondition(data.preCondition || '');
-        setSteps(data.steps?.length ? data.steps.map(s => ({ action: s.action, expectedResult: s.expectedResult })) : [EMPTY_STEP()]);
-        setSelPriority(data.priority || null);
-        setSelTypes((data.types || []).map(t => t.typeId || t.type?.id));
+        const tc = data.testCase;
+        setName(tc.name || '');
+        setPreCondition(tc.preCondition || '');
+        setSteps(tc.steps?.length ? tc.steps.map(s => ({ action: s.action, expectedResult: s.expectedResult })) : [EMPTY_STEP()]);
+        setSelPriority(tc.priority || null);
+        setSelTypes((tc.types || []).map(t => t.typeId || t.type?.id));
         // Set hierarchy
-        const m = data.scenario?.submodule?.module;
+        const m = tc.scenario?.submodule?.module;
         if (m) { setSelModule(m); setSubmodules(m.submodules || []); }
-        const sub = data.scenario?.submodule;
+        const sub = tc.scenario?.submodule;
         if (sub) { setSelSubmodule(sub); setScenarios(sub.scenarios || []); }
-        if (data.scenario) setSelScenario(data.scenario);
+        if (tc.scenario) setSelScenario(tc.scenario);
       } catch {
         Alert.alert('Error', 'Could not load test case.');
         navigation.goBack();
