@@ -25,53 +25,54 @@ export default function LoginScreen() {
   const ssoActive    = useRef(false);
   const ssoTimeout   = useRef(null);
 
-  // ── Parse callback URL and log the user in ─────────────────────────────────
-  function handleSsoCallback(url) {
-    if (!url || !url.startsWith(CALLBACK_PREFIX)) return;
-    ssoActive.current = false;
-    if (ssoTimeout.current) { clearTimeout(ssoTimeout.current); ssoTimeout.current = null; }
-    try {
-      const parsed      = new URL(url.replace('aerotestmanager://', 'https://placeholder.com/'));
-      const token       = parsed.searchParams.get('token');
-      const name        = parsed.searchParams.get('name')  || '';
-      const userEmail   = parsed.searchParams.get('email') || '';
-      const permsRaw    = parsed.searchParams.get('perms') || '[]';
-      const permissions = JSON.parse(decodeURIComponent(permsRaw));
-
-      if (!token) throw new Error('No token');
-      setSsoLoading(false);
-      loginWithToken(token, { name, email: userEmail }, permissions);
-    } catch {
-      setSsoLoading(false);
-      Alert.alert('SSO Failed', 'Could not complete sign-in. Please try again.');
-    }
-  }
-
   // ── Deep-link listener + cold-start handler ────────────────────────────────
+  // Defined inside the effect so loginWithToken is never stale.
   useEffect(() => {
-    const sub = Linking.addEventListener('url', ({ url }) => {
-      if (url.startsWith(CALLBACK_PREFIX)) {
-        sub.remove();
-        handleSsoCallback(url);
+    let handled = false;
+
+    function processCallback(url) {
+      if (!url || !url.startsWith(CALLBACK_PREFIX) || handled) return;
+      handled = true;
+      ssoActive.current = false;
+      if (ssoTimeout.current) { clearTimeout(ssoTimeout.current); ssoTimeout.current = null; }
+      try {
+        const parsed      = new URL(url.replace('aerotestmanager://', 'https://h.invalid/'));
+        const token       = parsed.searchParams.get('token');
+        const name        = parsed.searchParams.get('name')  || '';
+        const userEmail   = parsed.searchParams.get('email') || '';
+        const permsRaw    = parsed.searchParams.get('perms') || '[]';
+        const permissions = JSON.parse(decodeURIComponent(permsRaw));
+
+        if (!token) throw new Error('No token');
+        setSsoLoading(false);
+        loginWithToken(token, { name, email: userEmail }, permissions);
+      } catch {
+        setSsoLoading(false);
+        Alert.alert('SSO Failed', 'Could not complete sign-in. Please try again.');
       }
-    });
+    }
+
+    const sub = Linking.addEventListener('url', ({ url }) => processCallback(url));
+
+    // Handle cold-start: app launched directly from the deep link
     Linking.getInitialURL().then(url => {
-      if (url && url.startsWith(CALLBACK_PREFIX)) handleSsoCallback(url);
+      if (url && url.startsWith(CALLBACK_PREFIX)) processCallback(url);
     });
+
     return () => sub.remove();
-  }, []);
+  }, [loginWithToken]);
 
   // ── Reset loading if user returns to app without completing SSO ────────────
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => {
       if (state === 'active' && ssoActive.current) {
-        // Give the deep-link listener 2 s to fire before giving up
+        // Give the deep-link listener 5 s to fire before giving up
         ssoTimeout.current = setTimeout(() => {
           if (ssoActive.current) {
             ssoActive.current = false;
             setSsoLoading(false);
           }
-        }, 2000);
+        }, 5000);
       }
     });
     return () => sub.remove();
