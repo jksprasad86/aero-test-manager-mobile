@@ -105,23 +105,17 @@ jobs:
           path: android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
           retention-days: 30
 
-      # 11. Install Firebase CLI (pinned major to avoid breaking changes)
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools@13
-
-      # 12. Upload to Firebase App Distribution
+      # 11. Upload to Firebase App Distribution via official GitHub Action
       #     Required secrets:
-      #       FIREBASE_TOKEN  — generate once with: firebase login:ci
-      #       FIREBASE_APP_ID — from Firebase Console → Project Settings → Your apps
+      #       FIREBASE_APP_ID          — Firebase Console → Project Settings → Your apps
+      #       FIREBASE_SERVICE_ACCOUNT — Firebase Console → Project Settings →
+      #                                  Service Accounts → Generate new private key
+      #                                  (paste the full JSON content as the secret value)
       - name: Upload to Firebase App Distribution
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
-          RELEASE_NOTES: ${{ github.event.inputs.release_notes || 'New build' }}
-        run: |
-          firebase appdistribution:distribute \
-            android/app/build/outputs/apk/release/app-arm64-v8a-release.apk \
-            --app "$FIREBASE_APP_ID" \
-            --token "$FIREBASE_TOKEN" \
-            --groups "internal-team" \
-            --release-notes "$RELEASE_NOTES"
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          groups: internal-team
+          file: android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          releaseNotes: ${{ github.event.inputs.release_notes || 'New build' }}
