@@ -2,25 +2,13 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import * as Linking from 'expo-linking';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 
-// Deep-link prefix — matches the scheme in app.json
-const prefix = Linking.createURL('/');
-
+// Register the custom scheme so the OS routes aerotestmanager:// URLs to this app.
+// No screen config here — SSO callback is handled by Linking.addEventListener in LoginScreen.
 const linking = {
-  prefixes: [prefix, 'aerotestmanager://'],
-  config: {
-    screens: {
-      // LoginScreen handles sso-callback internally via handleDeepLink
-      Login: {
-        screens: {
-          'sso-callback': 'sso-callback',
-        },
-      },
-    },
-  },
+  prefixes: ['aerotestmanager://'],
 };
 
 export default function App() {

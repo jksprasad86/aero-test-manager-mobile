@@ -97,14 +97,29 @@ jobs:
             -Pandroid.injected.signing.key.alias=releasekey \
             -Pandroid.injected.signing.key.password=android123
 
-      # 10. Install Firebase CLI
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
+      # 10. Save APK as a workflow artifact so it is preserved even if distribution fails
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aero-test-manager-${{ github.run_number }}
+          path: android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          retention-days: 30
 
-      # 11. Upload to Firebase App Distribution
+      # 11. Install Firebase CLI (pinned major to avoid breaking changes)
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools@13
+
+      # 12. Write service-account JSON from secret so Firebase CLI can authenticate
+      #     without the deprecated FIREBASE_TOKEN.
+      #     Required secret: FIREBASE_SERVICE_ACCOUNT — paste the full JSON content
+      #     from Firebase Console → Project Settings → Service Accounts → Generate new private key.
+      - name: Write Firebase service account
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/firebase-sa.json
+
+      # 13. Upload to Firebase App Distribution
       - name: Upload to Firebase App Distribution
         env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json
           FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
           RELEASE_NOTES: ${{ github.event.inputs.release_notes || 'New build' }}
         run: |
@@ -113,3 +128,8 @@ jobs:
             --app "$FIREBASE_APP_ID" \
             --groups "internal-team" \
             --release-notes "$RELEASE_NOTES"
+
+      # 14. Clean up service-account file so it is never cached or uploaded
+      - name: Remove service account file
+        if: always()
+        run: rm -f /tmp/firebase-sa.json
