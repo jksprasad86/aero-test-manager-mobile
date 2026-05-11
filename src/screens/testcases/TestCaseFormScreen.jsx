@@ -61,7 +61,9 @@ export default function TestCaseFormScreen() {
   const [scenarios,   setScenarios]   = useState([]);
   const [priorities,  setPriorities]  = useState([]);
   const [types,       setTypes]       = useState([]);
-  const [selTypes,    setSelTypes]    = useState([]); // selected type IDs
+  const [tags,        setTags]        = useState([]);
+  const [selTypes,    setSelTypes]    = useState([]);
+  const [selTags,     setSelTags]     = useState([]);
   const [showTypes,   setShowTypes]   = useState(false);
 
   // Form state
@@ -85,35 +87,41 @@ export default function TestCaseFormScreen() {
   // Load module hierarchy + admin lookup data
   useEffect(() => {
     (async () => {
-      const moduleParams = route.params?.projectId ? { projectId: route.params.projectId } : {};
-      const [modulesRes, prioritiesRes, typesRes] = await Promise.all([
-        testCasesAPI.getModules(moduleParams),
-        adminAPI.getPriorities(),
-        adminAPI.getTypes(),
-      ]);
-      const loadedModules = modulesRes.data.modules || [];
-      setModules(loadedModules);
-      setPriorities([{ id: null, name: 'None' }, ...(prioritiesRes.data.priorities || [])]);
-      setTypes(typesRes.data.types || []);
+      try {
+        const moduleParams = route.params?.projectId ? { projectId: route.params.projectId } : {};
+        const [modulesRes, prioritiesRes, typesRes, tagsRes] = await Promise.all([
+          testCasesAPI.getModules(moduleParams),
+          adminAPI.getPriorities(),
+          adminAPI.getTypes(),
+          adminAPI.getTags(),
+        ]);
+        const loadedModules = modulesRes.data.modules || [];
+        setModules(loadedModules);
+        setPriorities([{ id: null, name: 'None' }, ...(prioritiesRes.data.priorities || [])]);
+        setTypes(typesRes.data.types || []);
+        setTags(tagsRes.data.tags || []);
 
-      // Pre-select from navigation params
-      if (route.params?.moduleId) {
-        const m = loadedModules.find(x => x.id === route.params.moduleId);
-        if (m) {
-          setSelModule(m);
-          setSubmodules(m.submodules || []);
-          if (route.params?.submoduleId) {
-            const s = (m.submodules || []).find(x => x.id === route.params.submoduleId);
-            if (s) {
-              setSelSubmodule(s);
-              setScenarios(s.scenarios || []);
-              if (route.params?.scenarioId) {
-                const sc = (s.scenarios || []).find(x => x.id === route.params.scenarioId);
-                if (sc) setSelScenario(sc);
+        // Pre-select from navigation params
+        if (route.params?.moduleId) {
+          const m = loadedModules.find(x => x.id === route.params.moduleId);
+          if (m) {
+            setSelModule(m);
+            setSubmodules(m.submodules || []);
+            if (route.params?.submoduleId) {
+              const s = (m.submodules || []).find(x => x.id === route.params.submoduleId);
+              if (s) {
+                setSelSubmodule(s);
+                setScenarios(s.scenarios || []);
+                if (route.params?.scenarioId) {
+                  const sc = (s.scenarios || []).find(x => x.id === route.params.scenarioId);
+                  if (sc) setSelScenario(sc);
+                }
               }
             }
           }
         }
+      } catch (err) {
+        Alert.alert('Error', 'Failed to load form options. Please go back and try again.');
       }
     })();
   }, []);
@@ -130,6 +138,7 @@ export default function TestCaseFormScreen() {
         setSteps(tc.steps?.length ? tc.steps.map(s => ({ action: s.action, expectedResult: s.expectedResult })) : [EMPTY_STEP()]);
         setSelPriority(tc.priority || null);
         setSelTypes((tc.types || []).map(t => t.typeId || t.type?.id));
+        setSelTags((tc.tags  || []).map(t => t.tagId  || t.tag?.id));
         // Set hierarchy
         const m = tc.scenario?.submodule?.module;
         if (m) { setSelModule(m); setSubmodules(m.submodules || []); }
@@ -167,6 +176,7 @@ export default function TestCaseFormScreen() {
         scenarioId:   selScenario.id,
         priorityId:   selPriority?.id || null,
         typeIds:      selTypes.filter(Boolean),
+        tagIds:       selTags.filter(Boolean),
         steps:        validSteps.map((s, i) => ({ order: i + 1, action: s.action.trim(), expectedResult: s.expectedResult.trim() })),
       };
 
@@ -260,6 +270,31 @@ export default function TestCaseFormScreen() {
                   key={t.id}
                   style={[styles.typeChip, selected && styles.typeChipSelected]}
                   onPress={() => setSelTypes(prev =>
+                    prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                  )}
+                >
+                  <Text style={[styles.typeChipText, selected && styles.typeChipTextSelected]}>
+                    {t.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* Tags (multi-select) */}
+      {tags.length > 0 && (
+        <View style={styles.field}>
+          <Text style={styles.label}>Tags</Text>
+          <View style={styles.typeChips}>
+            {tags.map(t => {
+              const selected = selTags.includes(t.id);
+              return (
+                <TouchableOpacity
+                  key={t.id}
+                  style={[styles.tagChip, selected && styles.tagChipSelected]}
+                  onPress={() => setSelTags(prev =>
                     prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
                   )}
                 >
@@ -368,4 +403,6 @@ const styles = StyleSheet.create({
   typeChipSelected:    { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   typeChipText:        { fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
   typeChipTextSelected:{ color: '#fff' },
+  tagChip:             { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: COLORS.info, backgroundColor: COLORS.surface },
+  tagChipSelected:     { backgroundColor: COLORS.info, borderColor: COLORS.info },
 });
