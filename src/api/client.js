@@ -40,11 +40,13 @@ export const dashboardAPI = {
 
 // ── Test Cases ───────────────────────────────────────────────────────────────
 export const testCasesAPI = {
-  getModules:        (params)=> api.get('/testcases/modules', { params }),
-  getAll:            (params)=> api.get('/testcases', { params }),
-  getOne:            (id)    => api.get(`/testcases/${id}`),
-  create:            (data)  => api.post('/testcases', data),
-  update:            (id, data) => api.put(`/testcases/${id}`, data),
+  getModules:       (params)     => api.get('/testcases/modules', { params }),
+  getAll:           (params)     => api.get('/testcases', { params }),
+  getOne:           (id)         => api.get(`/testcases/${id}`),
+  create:           (data)       => api.post('/testcases', data),
+  update:           (id, data)   => api.put(`/testcases/${id}`, data),
+  createSubmodule:  (data)       => api.post('/testcases/submodules', data),
+  createScenario:   (data)       => api.post('/testcases/scenarios', data),
 };
 
 // ── Daily Stats (Work Updates) ───────────────────────────────────────────────

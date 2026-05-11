@@ -219,19 +219,18 @@ export default function TestCasesScreen() {
 
           {projects.map(p => {
             const active = selProject?.id === p.id;
+            const label  = p.code || p.name;
             return (
               <TouchableOpacity
                 key={p.id}
                 style={[styles.projectChip, active && styles.projectChipActive]}
                 onPress={() => selectProject(p)}
               >
-                {p.code ? (
-                  <Text style={[styles.projectCode, active && { color: 'rgba(255,255,255,0.8)' }]}>
-                    {p.code}
-                  </Text>
-                ) : null}
-                <Text style={[styles.projectChipText, active && styles.projectChipTextActive]} numberOfLines={1}>
-                  {p.name}
+                <Text
+                  style={[styles.projectChipText, active && styles.projectChipTextActive]}
+                  numberOfLines={1}
+                >
+                  {label}
                 </Text>
               </TouchableOpacity>
             );
@@ -317,11 +316,10 @@ const styles = StyleSheet.create({
 
   projectStrip:        { backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border, flexGrow: 0 },
   projectStripContent: { paddingHorizontal: 12, paddingVertical: 10, gap: 8, flexDirection: 'row', alignItems: 'center' },
-  projectChip:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.background },
+  projectChip:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.background, maxWidth: 140 },
   projectChipActive:   { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   projectChipText:     { fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
   projectChipTextActive: { color: '#fff' },
-  projectCode:         { fontSize: 10, fontWeight: '700', color: COLORS.primary, marginRight: 4, backgroundColor: COLORS.primary + '18', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
 
   breadcrumb:    { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border, flexWrap: 'wrap', gap: 4 },
   breadItem:     { padding: 2 },

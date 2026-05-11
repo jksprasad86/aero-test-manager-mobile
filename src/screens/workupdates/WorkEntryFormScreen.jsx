@@ -253,7 +253,7 @@ export default function WorkEntryFormScreen() {
   useEffect(() => {
     adminAPI.getTicketStatuses()
       .then(({ data }) => setStatuses(data.statuses || []))
-      .catch(() => {});
+      .catch(() => Alert.alert('Warning', 'Could not load ticket statuses. Status fields will be unavailable.'));
   }, []);
 
   // Pre-fill form in edit mode
